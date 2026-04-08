@@ -186,6 +186,7 @@ def log_round_trace_to_csv(
     """
     Ghi nhật ký chi tiết từng vòng (trace) cho từng sự kiện.
     Lưu lại: Round, Input, SLM Pred, LLM Pred, Ground Truth, Confidence và Prompt.
+    Prompt của LLM được ghi đầy đủ, không cắt ngắn.
     
      
     1. Xác định đường dẫn file trace (mặc định từ config: TRACE_CSV).
@@ -217,7 +218,7 @@ def log_round_trace_to_csv(
                         "prompt",
                     ]
                 )
-            
+
             writer.writerow(
                 [
                     round_id,
@@ -227,7 +228,7 @@ def log_round_trace_to_csv(
                     ground_truth if ground_truth is not None else "N/A",
                     f"{conf_slm:.4f}",
                     text,
-                    prompt,
+                    str(prompt),
                 ]
             )
     except Exception:

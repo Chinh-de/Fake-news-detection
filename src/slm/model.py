@@ -16,6 +16,7 @@ from torch.utils.data import DataLoader
 from transformers import (
     RobertaTokenizer,
     RobertaForSequenceClassification,
+    get_linear_schedule_with_warmup,
 )
 
 from src.config import MODEL_PATH, SLM_BACKEND
@@ -301,3 +302,112 @@ class IntegratedSLM:
             "weight_decay": weight_decay,
             "avg_loss": avg_loss,
         }
+
+    def fnetune(
+        self,
+        train_texts: list[str],
+        train_labels: list[int],
+        model_init: str = "roberta-base",
+        epochs: int = 4,
+        batch_size: int = 32,
+        lr: float = 1e-5,
+        weight_decay: float = 1e-4,
+        warmup_ratio: float = 0.1,
+        max_grad_norm: float = 1.0,
+        save_path: str | None = None,
+    ) -> dict:
+        """
+        Khởi tạo mô hình từ bộ tiền huấn luyện và fine-tune như notebook.
+
+        Điều này khác với `finetune_on_clean` vì:
+        - nó khởi tạo lại mô hình từ `model_init`.
+        - nhận dữ liệu huấn luyện công khai (train_texts/train_labels).
+        - sử dụng scheduler và optimizer giống notebook.
+        - lưu lại best model theo train loss.
+        """
+        if len(train_texts) != len(train_labels):
+            raise ValueError("train_texts và train_labels phải cùng số lượng")
+        if len(train_texts) == 0:
+            return {"trained": False, "reason": "no_train_data"}
+
+        self._init_hf(model_init)
+        self.model.train()
+
+        train_dataset = FakeNewsDataset(train_texts, train_labels, self.tokenizer, max_len=128)
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
+        total_steps = len(train_loader) * epochs
+        optimizer = AdamW(self.model.parameters(), lr=lr, weight_decay=weight_decay)
+        scheduler = get_linear_schedule_with_warmup(
+            optimizer,
+            num_warmup_steps=int(total_steps * warmup_ratio),
+            num_training_steps=total_steps,
+        )
+
+        if save_path:
+            os.makedirs(save_path, exist_ok=True)
+            best_model_path = os.path.join(save_path, "best_model.pt")
+        else:
+            best_model_path = "best_model_fnetune.pt"
+
+        label_counts = torch.tensor(
+            [
+                sum(1 for l in train_labels if l == 0),
+                sum(1 for l in train_labels if l == 1),
+            ],
+            dtype=torch.float,
+        )
+        class_weights = (
+            label_counts.sum() / (2 * label_counts.clamp(min=1))
+        ).to(self.device)
+        loss_fn = torch.nn.CrossEntropyLoss(weight=class_weights)
+
+        history = {"train_loss": []}
+        best_train_loss = float("inf")
+
+        for epoch in range(epochs):
+            epoch_loss = 0.0
+            self.model.train()
+
+            for batch in train_loader:
+                input_ids = batch["input_ids"].to(self.device)
+                attention_mask = batch["attention_mask"].to(self.device)
+                labels_t = batch["labels"].to(self.device)
+
+                optimizer.zero_grad()
+                outputs = self.model(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                )
+                loss = loss_fn(outputs.logits, labels_t)
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_grad_norm)
+                optimizer.step()
+                scheduler.step()
+
+                epoch_loss += float(loss.item())
+
+            avg_train_loss = epoch_loss / max(1, len(train_loader))
+            history["train_loss"].append(avg_train_loss)
+
+            if avg_train_loss < best_train_loss:
+                best_train_loss = avg_train_loss
+                torch.save(self.model.state_dict(), best_model_path)
+
+        self.model.load_state_dict(torch.load(best_model_path))
+        self.model.eval()
+
+        if save_path:
+            self.model.save_pretrained(save_path)
+            self.tokenizer.save_pretrained(save_path)
+
+        result = {
+            "trained": True,
+            "samples": len(train_texts),
+            "epochs": epochs,
+            "train_loss_history": history["train_loss"],
+        }
+        if save_path:
+            result["save_path"] = save_path
+
+        return result
