@@ -70,13 +70,34 @@ class IntegratedSLM:
         3. Chuyển mô hình sang thiết bị tính toán (device).
         4. Thiết lập mô hình ở chế độ đánh giá (eval).
         """
-        self.tokenizer = RobertaTokenizer.from_pretrained(model_path)
-        self.model = RobertaForSequenceClassification.from_pretrained(
-            model_path, num_labels=2
+        self.tokenizer, self.model = self._load_roberta_components(
+            model_path=model_path,
+            eval_mode=True,
         )
-        self.model.to(self.device)
-        self.model.eval()
         print(f"SLM loaded (HF backend) on {self.device}")
+
+    def _load_roberta_components(self, model_path: str, eval_mode: bool = True):
+        """
+        Tải tokenizer và mô hình RoBERTa cho cả inference và fine-tune.
+
+        Args:
+            model_path: checkpoint local hoặc tên model trên HuggingFace Hub
+            eval_mode: nếu True thì đưa model về chế độ eval, ngược lại train
+
+        Returns:
+            tuple (tokenizer, model)
+        """
+        tokenizer = RobertaTokenizer.from_pretrained(model_path)
+        model = RobertaForSequenceClassification.from_pretrained(
+            model_path,
+            num_labels=2,
+        )
+        model.to(self.device)
+        if eval_mode:
+            model.eval()
+        else:
+            model.train()
+        return tokenizer, model
 
     def _inference_hf(self, text: str) -> tuple:
         """
@@ -167,12 +188,10 @@ class IntegratedSLM:
         
         # vLLM wraps the model for high-throughput inference
         # For sequence classification, we still need HF for fine-tuning
-        self.tokenizer = RobertaTokenizer.from_pretrained(model_path)
-        self.model = RobertaForSequenceClassification.from_pretrained(
-            model_path, num_labels=2
+        self.tokenizer, self.model = self._load_roberta_components(
+            model_path=model_path,
+            eval_mode=True,
         )
-        self.model.to(self.device)
-        self.model.eval()
         
         # vLLM is primarily for generative models; for classification
         # we use it as an optimized inference wrapper
@@ -235,7 +254,7 @@ class IntegratedSLM:
         epochs: int = 1,
         batch_size: int = 32,
         lr: float = 1e-5,
-        weight_decay: float = 1e-4,
+        weight_decay: float = 0.01,
     ) -> dict:
         """
         Fine-tune mô hình SLM trên tập dữ liệu sạch (D_clean) sau mỗi vòng.
@@ -267,6 +286,17 @@ class IntegratedSLM:
         loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
         optimizer = AdamW(self.model.parameters(), lr=lr, weight_decay=weight_decay)
+
+        label_counts = torch.tensor(
+            [
+                sum(1 for label in labels if label == 0),
+                sum(1 for label in labels if label == 1),
+            ],
+            dtype=torch.float,
+        )
+        class_weights = (label_counts.sum() / (2 * label_counts.clamp(min=1))).to(self.device)
+        loss_fn = torch.nn.CrossEntropyLoss(weight=class_weights)
+
         self.model.train()
 
         total_loss = 0.0
@@ -282,10 +312,10 @@ class IntegratedSLM:
                 outputs = self.model(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
-                    labels=labels_t,
                 )
-                loss = outputs.loss
+                loss = loss_fn(outputs.logits, labels_t)
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
                 optimizer.step()
 
                 total_loss += float(loss.item())
@@ -303,7 +333,7 @@ class IntegratedSLM:
             "avg_loss": avg_loss,
         }
 
-    def fnetune(
+    def finetune(
         self,
         train_texts: list[str],
         train_labels: list[int],
@@ -311,7 +341,7 @@ class IntegratedSLM:
         epochs: int = 4,
         batch_size: int = 32,
         lr: float = 1e-5,
-        weight_decay: float = 1e-4,
+        weight_decay: float = 0.01,
         warmup_ratio: float = 0.1,
         max_grad_norm: float = 1.0,
         save_path: str | None = None,
@@ -330,7 +360,10 @@ class IntegratedSLM:
         if len(train_texts) == 0:
             return {"trained": False, "reason": "no_train_data"}
 
-        self._init_hf(model_init)
+        self.tokenizer, self.model = self._load_roberta_components(
+            model_path=model_init,
+            eval_mode=False,
+        )
         self.model.train()
 
         train_dataset = FakeNewsDataset(train_texts, train_labels, self.tokenizer, max_len=128)
@@ -394,7 +427,7 @@ class IntegratedSLM:
                 best_train_loss = avg_train_loss
                 torch.save(self.model.state_dict(), best_model_path)
 
-        self.model.load_state_dict(torch.load(best_model_path))
+        self.model.load_state_dict(torch.load(best_model_path, map_location=self.device))
         self.model.eval()
 
         if save_path:
@@ -411,3 +444,32 @@ class IntegratedSLM:
             result["save_path"] = save_path
 
         return result
+
+    def fnetune(
+        self,
+        train_texts: list[str],
+        train_labels: list[int],
+        model_init: str = "roberta-base",
+        epochs: int = 4,
+        batch_size: int = 32,
+        lr: float = 1e-5,
+        weight_decay: float = 0.01,
+        warmup_ratio: float = 0.1,
+        max_grad_norm: float = 1.0,
+        save_path: str | None = None,
+    ) -> dict:
+        """
+        Backward-compatible alias for `finetune()`.
+        """
+        return self.finetune(
+            train_texts=train_texts,
+            train_labels=train_labels,
+            model_init=model_init,
+            epochs=epochs,
+            batch_size=batch_size,
+            lr=lr,
+            weight_decay=weight_decay,
+            warmup_ratio=warmup_ratio,
+            max_grad_norm=max_grad_norm,
+            save_path=save_path,
+        )
