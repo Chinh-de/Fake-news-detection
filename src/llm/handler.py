@@ -160,7 +160,7 @@ try:
                 model=self.model_name,
                 max_model_len=8192,
                 trust_remote_code=True,
-                gpu_memory_utilization=0.8,
+                gpu_memory_utilization=0.7,
                 tensor_parallel_size=1,
                 swap_space=4,
                 enforce_eager=True,
