@@ -18,4 +18,3 @@ python-dotenv
 requests
 huggingface-hub>=0.23.0
 vllm>=0.5.0    
-ray>=2.9.0
