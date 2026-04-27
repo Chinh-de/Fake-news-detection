@@ -39,18 +39,20 @@ LLM_MODEL_NAME = os.environ.get(
     "LLM_MODEL_NAME",
     "meta-llama/Meta-Llama-3-8B-Instruct",
 )
+
 LLM_MAX_NEW_TOKENS = 128
 LLM_MAX_OUTPUT_TOKENS_EXTRACTION = 96
 # LLM chỉ trả về "Real" hoặc "Fake" 
 LLM_MAX_OUTPUT_TOKENS_CLASSIFICATION = 1
 LLM_TEMPERATURE = 0.0
 LLM_TOP_P = 1.0
-
+# Backend for LLM: "hf" (Hugging Face) or "vllm"
+LLM_BACKEND = os.environ.get("LLM_BACKEND", "vllm")
 # ============================================================
 # SLM Backend Configuration
 # ============================================================
 # "hf" for HuggingFace Transformers, "vllm" for vLLM
-SLM_BACKEND = os.environ.get("SLM_BACKEND", "vllm")
+SLM_BACKEND = os.environ.get("SLM_BACKEND", "hf")
 
 # ============================================================
 # Pipeline Hyperparameters
