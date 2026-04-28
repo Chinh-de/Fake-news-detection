@@ -47,7 +47,7 @@ LLM_MAX_OUTPUT_TOKENS_CLASSIFICATION = 1
 LLM_TEMPERATURE = 0.0
 LLM_TOP_P = 1.0
 # Backend for LLM: "hf" (Hugging Face) or "vllm"
-# LLM_BACKEND = os.environ.get("LLM_BACKEND", "hf")
+LLM_BACKEND = os.environ.get("LLM_BACKEND", "hf")
 # ============================================================
 # SLM Backend Configuration
 # ============================================================
