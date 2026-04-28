@@ -203,7 +203,7 @@ class IntegratedSLM:
         train_weights: list,
         epochs: int = 10,
         batch_size: int = 32,
-        lr: float = 2e-5,
+        lr: float = 2e-6,
         weight_decay: float = 0.01,
         early_stop: int = 5,
         val_texts: list = None,
