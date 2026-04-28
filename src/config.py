@@ -47,7 +47,7 @@ LLM_MAX_OUTPUT_TOKENS_CLASSIFICATION = 1
 LLM_TEMPERATURE = 0.0
 LLM_TOP_P = 1.0
 # Backend for LLM: "hf" (Hugging Face) or "vllm"
-LLM_BACKEND = os.environ.get("LLM_BACKEND", "hf")
+# LLM_BACKEND = os.environ.get("LLM_BACKEND", "hf")
 # ============================================================
 # SLM Backend Configuration
 # ============================================================
@@ -57,7 +57,7 @@ SLM_BACKEND = os.environ.get("SLM_BACKEND", "hf")
 # ============================================================
 # Pipeline Hyperparameters
 # ============================================================
-CONFIDENCE_THRESHOLD = 0.7
+CONFIDENCE_THRESHOLD = 0.8
 NUM_LOOP = 3
 TOP_K_DEMOS = 4
 FACT_TOP_K = 3
@@ -75,7 +75,7 @@ CRAWL_MAX_WORKERS = min(8, max(2, (os.cpu_count() or 4)))
 ENABLE_SLM_FINETUNE = True
 SLM_FINETUNE_EPOCHS = 1
 SLM_FINETUNE_BATCH_SIZE = 32
-SLM_FINETUNE_LR = 5e-5
+SLM_FINETUNE_LR = 2e-5
 SLM_FINETUNE_WEIGHT_DECAY = 0.01
 SLM_FINETUNE_MIN_SAMPLES = 16
 
