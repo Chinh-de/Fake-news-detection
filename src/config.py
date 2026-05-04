@@ -57,7 +57,7 @@ SLM_BACKEND = os.environ.get("SLM_BACKEND", "hf")
 # ============================================================
 # Pipeline Hyperparameters
 # ============================================================
-CONFIDENCE_THRESHOLD = 0.7
+CONFIDENCE_THRESHOLD = 0.8
 NUM_LOOP = 3
 TOP_K_DEMOS = 4
 FACT_TOP_K = 3
@@ -77,7 +77,7 @@ SLM_FINETUNE_EPOCHS = 2
 SLM_FINETUNE_BATCH_SIZE = 32
 SLM_FINETUNE_LR = 1e-3
 SLM_FINETUNE_WEIGHT_DECAY = 1e-4
-SLM_FINETUNE_MIN_SAMPLES = 16
+SLM_FINETUNE_MIN_SAMPLES = 10
 
 # ============================================================
 # Knowledge Retrieval Mode
