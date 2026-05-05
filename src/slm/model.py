@@ -210,9 +210,9 @@ class IntegratedSLM:
         train_domain_labels: Optional[list] = None,
         epochs: int = 10,
         batch_size: int = 32,
-        lr: float = 1e-5,
+        lr: float = 1e-3,
         weight_decay: float = 1e-4,
-        lambda_adv: float = 0.1,
+        lambda_adv: float = 0.0,
         save_path: Optional[str] = None,
     ) -> dict:
         """
@@ -303,7 +303,7 @@ class IntegratedSLM:
         batch_size: int = 32,
         lr: float = 1e-3,
         weight_decay: float = 1e-4,
-        lambda_adv: float = 0.1,
+        lambda_adv: float = 0.0,
     ) -> dict:
         valid = [s for s in clean_samples if s.get("text") and s.get("label") in [0, 1]]
         if not valid:
