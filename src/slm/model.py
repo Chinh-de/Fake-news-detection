@@ -305,10 +305,6 @@ class IntegratedSLM:
         weight_decay: float = 1e-4,
         lambda_adv: float = 0.1,
     ) -> dict:
-        """
-        Fine‑tune only the MLP and domain classifier heads on the clean pool.
-        Each sample should contain 'text', 'label', 'conf_slm', and optionally 'domain_label'.
-        """
         valid = [s for s in clean_samples if s.get("text") and s.get("label") in [0, 1]]
         if not valid:
             return {"trained": False, "reason": "no_valid_samples"}
@@ -317,13 +313,27 @@ class IntegratedSLM:
         labels  = torch.tensor([int(s["label"]) for s in valid], dtype=torch.float, device=self.device)
         weights = torch.tensor([float(s.get("conf_slm", 0.8)) for s in valid], dtype=torch.float, device=self.device)
 
-        has_domain = all("domain_label" in s for s in valid)
-        if has_domain:
-            domain_labels = torch.tensor([int(s["domain_label"]) for s in valid], dtype=torch.long, device=self.device)
-        else:
-            domain_labels = torch.zeros(len(valid), dtype=torch.long, device=self.device)
+        # ---- Kiểm tra domain label ----
+        # Lấy domain label nếu có (có thể chỉ một số sample có)
+        domain_labels_list = []
+        for s in valid:
+            if "domain_label" in s:
+                dl = int(s["domain_label"])
+                # Kiểm tra giá trị hợp lệ
+                if dl < 0 or dl >= self.domain_num:
+                    raise ValueError(f"domain_label {dl} out of range [0, {self.domain_num-1}]")
+                domain_labels_list.append(dl)
+            else:
+                domain_labels_list.append(-1)  # đánh dấu không có
 
-        # Trainable parameters: only classifier and domain_classifier (heads)
+        has_domain = any(dl != -1 for dl in domain_labels_list)
+        if has_domain:
+            # Gán nhãn mặc định 0 cho những sample thiếu (hoặc có thể loại bỏ)
+            domain_labels = torch.tensor([max(0, dl) for dl in domain_labels_list], dtype=torch.long, device=self.device)
+        else:
+            domain_labels = None  # không sử dụng domain loss
+
+        # Trainable parameters: chỉ classifier heads
         trainable_params = list(self.model.classifier.parameters()) + list(self.model.domain_classifier.parameters())
         optimizer = Adam(trainable_params, lr=lr, weight_decay=weight_decay)
         loss_bce = InstanceWeightedBCELoss()
@@ -335,19 +345,23 @@ class IntegratedSLM:
             self.model.train()
             idx = np.random.permutation(len(texts)).tolist()
             for start in range(0, len(idx), batch_size):
-                batch_idx = idx[start:start + batch_size]
+                batch_idx = idx[start:start+batch_size]
                 batch_texts   = [texts[i] for i in batch_idx]
                 batch_labels  = labels[batch_idx]
                 batch_weights = weights[batch_idx]
-                batch_domain  = domain_labels[batch_idx]
 
                 enc = self._tokenise(batch_texts)
-                alpha = 1.0  # fixed for MRCD fine‑tuning
+                alpha = 1.0
                 pred, domain_pred = self.model(alpha=alpha, **enc)
 
-                loss_cls = loss_bce(pred, batch_labels, batch_weights)
-                loss_adv = loss_domain(domain_pred, batch_domain) if has_domain else torch.tensor(0.0, device=self.device)
-                loss = loss_cls + lambda_adv * loss_adv
+                loss = loss_bce(pred, batch_labels, batch_weights)
+
+                if has_domain and domain_labels is not None:
+                    batch_domain = domain_labels[batch_idx]
+                    # Chỉ tính loss_adv nếu batch có ít nhất một sample có nhãn domain thực
+                    if (batch_domain >= 0).any():
+                        loss_adv = loss_domain(domain_pred, batch_domain)
+                        loss = loss + lambda_adv * loss_adv
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -365,7 +379,7 @@ class IntegratedSLM:
             "batch_size": batch_size,
             "lr": lr,
             "weight_decay": weight_decay,
-            "lambda_adv": lambda_adv,
+            "lambda_adv": lambda_adv if has_domain else 0.0,
             "avg_loss": total_loss / max(1, total_steps),
         }
 
