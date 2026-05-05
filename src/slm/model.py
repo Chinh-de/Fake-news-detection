@@ -313,25 +313,30 @@ class IntegratedSLM:
         labels  = torch.tensor([int(s["label"]) for s in valid], dtype=torch.float, device=self.device)
         weights = torch.tensor([float(s.get("conf_slm", 0.8)) for s in valid], dtype=torch.float, device=self.device)
 
-        # ---- Kiểm tra domain label ----
-        # Lấy domain label nếu có (có thể chỉ một số sample có)
-        domain_labels_list = []
-        for s in valid:
-            if "domain_label" in s:
-                dl = int(s["domain_label"])
-                # Kiểm tra giá trị hợp lệ
-                if dl < 0 or dl >= self.domain_num:
-                    raise ValueError(f"domain_label {dl} out of range [0, {self.domain_num-1}]")
-                domain_labels_list.append(dl)
-            else:
-                domain_labels_list.append(-1)  # đánh dấu không có
-
-        has_domain = any(dl != -1 for dl in domain_labels_list)
-        if has_domain:
-            # Gán nhãn mặc định 0 cho những sample thiếu (hoặc có thể loại bỏ)
-            domain_labels = torch.tensor([max(0, dl) for dl in domain_labels_list], dtype=torch.long, device=self.device)
-        else:
-            domain_labels = None  # không sử dụng domain loss
+        # Chỉ sử dụng domain loss nếu lambda_adv > 0
+        use_domain = lambda_adv > 0
+        has_domain = False
+        domain_labels = None
+        if use_domain:
+            domain_labels_list = []
+            for s in valid:
+                if "domain_label" in s:
+                    dl = int(s["domain_label"])
+                    if dl < 0 or dl >= self.domain_num:
+                        print(f"Warning: domain_label {dl} out of range [0, {self.domain_num-1}]. Domain loss disabled.")
+                        use_domain = False
+                        has_domain = False
+                        break
+                    domain_labels_list.append(dl)
+                else:
+                    domain_labels_list.append(-1)
+            if use_domain:
+                has_domain = any(dl != -1 for dl in domain_labels_list)
+                if has_domain:
+                    domain_labels = torch.tensor([max(0, dl) for dl in domain_labels_list], dtype=torch.long, device=self.device)
+                else:
+                    print("Warning: No domain labels found in clean_samples. Domain loss disabled.")
+                    use_domain = False
 
         # Trainable parameters: chỉ classifier heads
         trainable_params = list(self.model.classifier.parameters()) + list(self.model.domain_classifier.parameters())
@@ -358,7 +363,6 @@ class IntegratedSLM:
 
                 if has_domain and domain_labels is not None:
                     batch_domain = domain_labels[batch_idx]
-                    # Chỉ tính loss_adv nếu batch có ít nhất một sample có nhãn domain thực
                     if (batch_domain >= 0).any():
                         loss_adv = loss_domain(domain_pred, batch_domain)
                         loss = loss + lambda_adv * loss_adv
