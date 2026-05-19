@@ -1,0 +1,11 @@
+streamlit
+torch
+transformers
+numpy
+pandas
+rank-bm25
+datasets
+duckduckgo-search
+ddgs
+beautifulsoup4
+requests
