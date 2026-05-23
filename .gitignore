@@ -1,58 +1,65 @@
-# Python
+# =============================================================================
+# .gitignore — ViFN Fake News Detection Platform
+# Structure: be/ (FastAPI + ML) | fe/ (Next.js)
+# =============================================================================
+
+# ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
 *.egg
+*.egg-info/
+.eggs/
+dist/
+build/
+wheels/
+sdist/
+.installed.cfg
 
-# Virtual environments
+# ── Virtual environments ──────────────────────────────────────────────────────
 .venv/
 .venv-*/
 venv/
-ENV/
 env/
+ENV/
 
-# IDE
+# ── Database (local SQLite) ───────────────────────────────────────────────────
+be/vifn.db
+
+# ── Model weights (large files) ───────────────────────────────────────────────
+model/
+be/model/
+be/param_model/
+
+# ── Node.js / Next.js ─────────────────────────────────────────────────────────
+fe/node_modules/
+fe/.next/
+fe/.env
+fe/.env.local
+fe/.env*.local
+fe/out/
+
+# ── Environment variables ─────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── IDE / Editor ──────────────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# Model folders (ignore large model files)
-model/
-models/
-**/model/
-**/models/
-param_model/
-
-# Data files (optional, uncomment if needed)
-# *.csv
-# *.json
-
-# OS
+# ── OS ────────────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+Desktop.ini
 
-# Jupyter
+# ── Jupyter ───────────────────────────────────────────────────────────────────
 .ipynb_checkpoints/
 *.ipynb_checkpoints
 
-# Environment variables
-.env
-.env.local
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
