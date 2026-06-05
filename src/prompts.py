@@ -49,17 +49,30 @@ def build_dual_extraction_prompt(text: str) -> str:
 
 def build_entity_extraction_prompt(text: str) -> str:
     """
-    Xây dựng prompt CHỈ trích xuất thực thể cho chế độ wiki_only (tiếng Việt).
+    Xây dựng prompt CHỈ trích xuất thực thể cho chế độ wiki_only.
     """
     system_prompt = (
         "Bạn là chuyên gia Trích xuất Kiểm chứng Sự kiện cấp cao.\n\n"
+
         "NHIỆM VỤ: CÁC THỰC THỂ WIKIPEDIA CHIẾN LƯỢC (Tối đa 3 thực thể)\n"
-        "- Trích xuất 1 đến 4 thực thể được đặt tên chính (Người, Tổ chức, Địa điểm, Sự kiện) từ văn bản "
-        "những cái quan trọng để xác minh tuyên bố và có khả năng cao có trang Wikipedia.\n\n"
+        "- Hãy trích xuất các danh từ riêng đại diện cho các thực thể nền tảng xuất hiện trong văn bản: "
+        "bao gồm Chủ thể (Cơ quan, tổ chức, pháp nhân, nhân vật) hoặc TÊN RIÊNG CỦA CÁC SỰ KIỆN / BIẾN CỐ / "
+        "CỘT MỐC THỜI SỰ VÀ LỊCH SỬ.\n"
+
+        "- QUY TẮC TRÍCH XUẤT ĐỐI CHIẾU:\n"
+        "  1. Bắt buộc trích xuất nếu thực thể đó là nguồn phát ngôn, đối tượng hành động, hoặc chịu trách nhiệm chính của thông tin.\n"
+        "  2. VẪN TRÍCH XUẤT các thực thể phụ trợ (thương hiệu, hiệp hội, tên sự kiện được viện dẫn) nếu chúng chứa đựng thông tin cốt lõi, đóng vai trò là 'bằng chứng danh tính' hoặc 'neo logic' để hệ thống tra cứu từ điển xem thông tin có bị mâu thuẫn mốc thời gian, địa điểm hoặc sai lệch bối cảnh thực tế hay không.\n"
+        "  3. Tuyệt đối không bốc tên các cá nhân đơn lẻ không có tầm ảnh hưởng xã hội. Nếu cá nhân đó không có khả năng sở hữu trang hồ sơ riêng trên Wikipedia, việc trích xuất chắc chắn sẽ gây lỗi tra cứu sai lệch sang một thực thể trùng tên khác.\n"
+        "  4. LOẠI BỎ các danh từ chung chung, mang tính đại chúng không có trang định nghĩa bối cảnh riêng trên các hệ thống từ điển tri thức.\n\n"
+
         "ĐỊNH DẠNG ĐẦU RA:\n"
-        "Chỉ trả về một đối tượng JSON hợp lệ. KHÔNG bao bọc trong các thẻ markdown, không giải thích.\n"
-        'struct output: {"entities": ["entity_1", "entity_2"]}'
+        "Chỉ trả về một đối tượng JSON hợp lệ. "
+        "KHÔNG bao bọc trong các thẻ markdown, không giải thích gì thêm.\n\n"
+
+        'Cấu trúc đích bắt buộc:\n'
+        '{"entities": ["thực_thể_1", "thực_thể_2"]}'
     )
+
     return f"{system_prompt}\n\nVăn bản đầu vào: {text}"
 
 
@@ -97,7 +110,7 @@ Nội dung: "{text_input}"
 CÁC VÍ DỤ MẪU ĐỂ HỌC TẬP (VÍ DỤ THAM KHẢO):
 {demo_text}
 
-Kết luận (Chỉ ghi "Thật" hoặc "Giả" / Real or Fake):"""
+Kết luận (Chỉ ghi "Thật" hoặc "Giả" ):"""
 
 
 def build_classification_prompt_wiki_only(text: str, knowledge_k: str, demos: list) -> str:
