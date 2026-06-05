@@ -363,7 +363,7 @@ def retrieve_fact_evidence(
     search_query = f"{query} {trusted_domains}".strip()
 
     results = []
-    for backend in ["bing", "yahoo"]:
+    for backend in ["yahoo", "brave", "auto"]:
         try:
             with DDGS(timeout=20) as ddgs:
                 results_gen = ddgs.text(
