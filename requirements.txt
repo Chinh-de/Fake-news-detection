@@ -19,4 +19,9 @@ requests
 huggingface-hub
 pyvi
 duckdb
-underthesea>=6.0.0
+underthesea>=6.0.0
+asyncpg
+sqlalchemy
+nest-asyncio
+
+
