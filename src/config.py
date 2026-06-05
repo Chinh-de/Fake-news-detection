@@ -39,11 +39,11 @@ LLM_MODEL_NAME = os.environ.get(
     "LLM_MODEL_NAME",
     "Qwen/Qwen2.5-7B-Instruct",  # Better support for Vietnamese than Llama 3
 )
-LLM_MAX_NEW_TOKENS = 256
-LLM_MAX_OUTPUT_TOKENS_EXTRACTION = 96
-# LLM chỉ trả về "Thật" hoặc "Giả"
-LLM_MAX_OUTPUT_TOKENS_CLASSIFICATION = 10
+LLM_MAX_NEW_TOKENS = 1024
+LLM_MAX_OUTPUT_TOKENS_EXTRACTION = 1024
+LLM_MAX_OUTPUT_TOKENS_CLASSIFICATION = 15
 LLM_TEMPERATURE = 0.0
+
 LLM_TOP_P = 1.0
 # # ============================================================
 # # Search Engine Configuration
