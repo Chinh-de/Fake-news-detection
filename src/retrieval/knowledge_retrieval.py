@@ -15,6 +15,7 @@ from bs4 import BeautifulSoup
 from curl_cffi import requests as curl_requests
 from ddgs import DDGS
 from sentence_transformers import SentenceTransformer
+from src.utils import clean_text_transformer
 
 from src.config import (
     TRUST_DOMAINS,
@@ -52,15 +53,6 @@ def is_valid_article_url(url: str) -> bool:
         return False
     return True
 
-
-def strip_vietnamese_word_seg(text: str) -> str:
-    """
-    Xóa dấu gạch dưới tách từ tiếng Việt mà VnExpress/VOV chèn vào HTML.
-    Ví dụ: "xung_đột" → "xung đột", "bùng_phát" → "bùng phát".
-    Chỉ xóa _ kẹp giữa 2 ký tự không-khoảng-trắng (tránh xóa _ trong URL/code).
-    """
-    # Thay thế dấu _ kẹp giữa 2 ký tự bằng khoảng trắng
-    return re.sub(r'(?<=\S)_(?=\S)', ' ', text)
 
 
 def analyze_claim_entities_and_query(text: str, mode: str = "full") -> dict:
@@ -184,8 +176,7 @@ def scrape_full_article(url: str) -> str | None:
         raw_text = re.sub(r"\[.*?\]", "", raw_text)
         article_text = re.sub(r"\s+", " ", raw_text).strip()
 
-        # Xóa dấu gạch dưới tách từ tiếng Việt từ nguồn VnExpress/VOV
-        article_text = strip_vietnamese_word_seg(article_text)
+
 
         if not article_text:
             return None
@@ -414,15 +405,15 @@ def retrieve_fact_evidence(
     all_chunks = []
 
     for doc in documents:
-        # Áp dụng clean_text_transformer trên nội dung cào trước khi chunking như reference code
-        from src.utils import clean_text_transformer
+        # Áp dụng clean_text_transformer trên nội dung cào trước khi chunking để đồng bộ với backend
         cleaned_content = clean_text_transformer(doc["content"])
         if not cleaned_content:
             continue
 
+        # Giới hạn tối đa 15 chunks đầu tiên của mỗi bài viết để tránh nhiễu
         chunks = chunk_text_by_sentences(
             cleaned_content, max_words=300, overlap_sentences=1
-        )
+        )[:15]
         for chunk in chunks:
             all_chunks.append({
                 "chunk_text": chunk,

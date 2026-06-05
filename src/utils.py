@@ -153,12 +153,8 @@ def clean_text_transformer(text: str) -> str:
 
 def clean_text_for_slm(text: str) -> str:
     """
-    Tiền xử lý văn bản đầy đủ cho SLM (PhoBERT): clean_text_transformer + tách từ underthesea.
-    
-    Chỉ dùng hàm này trước khi đưa vào SLM inference/fine-tune.
-    KHÔNG dùng cho nội dung RAG/wiki (tránh thêm dấu gạch dưới vào chunk_text).
+    Tách từ tiếng Việt bằng underthesea cho SLM (PhoBERT) trên văn bản đã được làm sạch trước đó.
     """
-    text = clean_text_transformer(text)
     if not text:
         return text
     # Tách từ tiếng Việt bằng underthesea (tạo dạng "xung_đột" chuẩn cho PhoBERT)

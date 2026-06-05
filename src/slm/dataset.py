@@ -9,7 +9,7 @@ import torch
 from torch.utils.data import Dataset
 
 from src.config import TRAIN_CSV, VAL_CSV, TEST_CSV
-from src.utils import clean_text_for_slm
+from src.utils import clean_text_for_slm, clean_text_transformer
 
 
 class FakeNewsDataset(Dataset):
@@ -101,7 +101,7 @@ def load_data_from_csv(
                     print(f"Available columns: {list(df.columns)}")
                     return [], []
             
-            texts = [clean_text_for_slm(t) for t in df[text_col].astype(str).tolist()]
+            texts = [clean_text_for_slm(clean_text_transformer(t)) for t in df[text_col].astype(str).tolist()]
             # Support Vietnamese dataset: 0 = Real/True, 1 = Fake
             labels = []
             for label in df["label"].astype(str).tolist():
