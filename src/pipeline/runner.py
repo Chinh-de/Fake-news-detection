@@ -324,8 +324,9 @@ def run_mrcd_pipeline(
             "conf_slm": state["conf_slm"],
             "status": state["status"],
             "fewshot_examples": state["fewshot_examples"],
+            # RAG và wiki chỉ lưu ở Round 1 (bootstrap). Round 2+ dùng None để tránh trùng lặp.
             "rag_evidence": state["rag_evidence"],
-            "wiki_evidence": state["wiki_evidence"]
+            "wiki_evidence": state["wiki_evidence"],
         })
 
     round_history.append(
@@ -447,8 +448,10 @@ def run_mrcd_pipeline(
                 "conf_slm": state["conf_slm"],
                 "status": state["status"],
                 "fewshot_examples": state.get("round_fewshot_examples"),
-                "rag_evidence": state.get("round_rag_evidence"),
-                "wiki_evidence": state.get("round_wiki_evidence")
+                # RAG và wiki được bootstrap 1 lần ở Round 1 và tái sử dụng qua query_context cache.
+                # Không lưu lại ở round 2+ để tránh trùng lặp dữ liệu lớn trong DB.
+                "rag_evidence": None,
+                "wiki_evidence": None,
             })
 
         d_noisy = next_noisy

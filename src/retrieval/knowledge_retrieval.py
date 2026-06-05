@@ -1,7 +1,7 @@
 """
 Branch 2: Knowledge Retrieval (LLM Analysis + Parallel Crawl + Rerank)
 - Entity extraction via LLM
-- Trusted domain search
+- Trusted domain search (vn-vi region, with URL validation)
 - Parallel web crawling with ThreadPoolExecutor
 - Cross-encoder reranking
 """
@@ -24,6 +24,43 @@ from src.config import (
 from src.utils import clean_query, truncate_text, log_retrieval_to_csv
 from src.prompts import build_dual_extraction_prompt, build_entity_extraction_prompt
 from src.llm.handler import get_llm
+
+
+def is_trusted_url(url: str, domains: list = None) -> bool:
+    """Kiểm tra URL có thuộc các domain tin cậy không."""
+    if not url:
+        return False
+    if domains is None:
+        domains = TRUST_DOMAINS
+    url_lower = url.strip().lower()
+    domain = re.sub(r'^https?://(www\.)?', '', url_lower)
+    host = domain.split('/')[0].split('?')[0].split(':')[0]
+    for d in domains:
+        if host == d or host.endswith("." + d):
+            return True
+    return False
+
+
+def is_valid_article_url(url: str) -> bool:
+    """Lọc bỏ file sitemap, ảnh, xml không phải bài báo."""
+    if not url:
+        return False
+    url_lower = url.lower()
+    if url_lower.endswith(('.xml', '.png', '.jpg', '.jpeg', '.gif', '.pdf')):
+        return False
+    if 'sitemap' in url_lower:
+        return False
+    return True
+
+
+def strip_vietnamese_word_seg(text: str) -> str:
+    """
+    Xóa dấu gạch dưới tách từ tiếng Việt mà VnExpress/VOV chèn vào HTML.
+    Ví dụ: "xung_đột" → "xung đột", "bùng_phát" → "bùng phát".
+    Chỉ xóa _ kẹp giữa 2 ký tự không-khoảng-trắng (tránh xóa _ trong URL/code).
+    """
+    # Thay thế dấu _ kẹp giữa 2 ký tự bằng khoảng trắng
+    return re.sub(r'(?<=\S)_(?=\S)', ' ', text)
 
 
 def analyze_claim_entities_and_query(text: str, mode: str = "full") -> dict:
@@ -146,6 +183,9 @@ def scrape_full_article(url: str) -> str | None:
         raw_text = re.sub(r"www\.\S+", "", raw_text)
         raw_text = re.sub(r"\[.*?\]", "", raw_text)
         article_text = re.sub(r"\s+", " ", raw_text).strip()
+
+        # Xóa dấu gạch dưới tách từ tiếng Việt từ nguồn VnExpress/VOV
+        article_text = strip_vietnamese_word_seg(article_text)
 
         if not article_text:
             return None
@@ -332,23 +372,34 @@ def retrieve_fact_evidence(
     search_query = f"{query} {trusted_domains}".strip()
 
     results = []
-    try:
-        with DDGS(timeout=20) as ddgs:
-            results_gen = ddgs.text(
-                search_query, backend="bing", max_results=max_urls
-            )
-            for i, r in enumerate(results_gen):
-                if i >= max_urls:
-                    break
-                title = str(r.get("title", "")).strip()
-                url = str(r.get("href", "")).strip()
-                snippet = str(r.get("body", "")).strip()
-                results.append({"title": title, "url": url, "snippet": snippet})
-                log_retrieval_to_csv(
-                    "retrieve_fact_evidence", search_query, title, url, snippet
+    for backend in ["bing", "yahoo"]:
+        try:
+            with DDGS(timeout=20) as ddgs:
+                results_gen = ddgs.text(
+                    search_query,
+                    region="vn-vi",   # Ưu tiên kết quả tiếng Việt
+                    backend=backend,
+                    max_results=max_urls,
                 )
-    except Exception:
-        results = []
+                raw_results = []
+                for i, r in enumerate(results_gen):
+                    if i >= max_urls:
+                        break
+                    title = str(r.get("title", "")).strip()
+                    url = str(r.get("href", "")).strip()
+                    snippet = str(r.get("body", "")).strip()
+                    # Lọc URL: chỉ giữ trusted domain và bài báo hợp lệ
+                    if not is_trusted_url(url) or not is_valid_article_url(url):
+                        continue
+                    raw_results.append({"title": title, "url": url, "snippet": snippet})
+                    log_retrieval_to_csv(
+                        "retrieve_fact_evidence", search_query, title, url, snippet
+                    )
+                if raw_results:
+                    results = raw_results
+                    break  # Dùng kết quả từ backend đầu tiên có kết quả
+        except Exception:
+            continue
 
     # === PARALLEL CRAWL ===
     documents = crawl_results_parallel(results, max_workers=crawl_max_workers)

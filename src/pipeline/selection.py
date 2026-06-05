@@ -71,7 +71,9 @@ def finalize_remaining_noisy_with_slm(d_noisy: list, slm) -> list:
 
     finalized = []
     for sample in d_noisy:
-        text = clean_text_transformer(sample["text"])
+        # text đã được clean_text_transformer() 1 lần từ runner.py (dòng 101)
+        # Không gọi lại để tránh double-cleaning gây lệch kết quả vs Round inference
+        text = sample["text"]
         y_slm, conf_slm, probs_slm = slm.inference(text)
 
         final_sample = dict(sample)

@@ -20,7 +20,7 @@ from transformers import (
 )
 
 from src.config import MODEL_PATH, SLM_BACKEND
-from src.utils import clean_text_transformer
+from src.utils import clean_text_for_slm
 from src.slm.dataset import FakeNewsDataset
 
 
@@ -80,7 +80,7 @@ class IntegratedSLM:
     # Inference
     # ================================================================
     def _inference_hf(self, text: str) -> tuple:
-        clean_text = clean_text_transformer(text)
+        clean_text = clean_text_for_slm(text)
         inputs = self.tokenizer(
             clean_text,
             return_tensors="pt",
@@ -88,6 +88,7 @@ class IntegratedSLM:
             max_length=256,  # Tăng từ 128 → 256 để giữ context đầy đủ cho tin tức tiếng Việt
             padding="max_length",
         )
+        self.model.eval()  # Đảm bảo model ở eval mode (tắt dropout) trước khi inference
         with torch.no_grad():
             outputs = self.model(
                 inputs["input_ids"].to(self.device),
@@ -99,7 +100,7 @@ class IntegratedSLM:
 
     def _inference_hf_batch(self, texts: list[str], batch_size: int = 16) -> list[tuple]:
         """Batch inference. batch_size giảm còn 16 (từ 32) do max_length tăng lên 256."""
-        clean_texts = [clean_text_transformer(t) for t in texts]
+        clean_texts = [clean_text_for_slm(t) for t in texts]
         results = []
         self.model.eval()
         with torch.no_grad():
@@ -200,7 +201,7 @@ class IntegratedSLM:
 
             avg_loss = epoch_loss / len(loader)
             history["train_loss"].append(avg_loss)
-            print(f"[Full FT] Epoch {epoch+1}/{epochs} | Loss {avg_loss:.4f}")
+            # print(f"[Full FT] Epoch {epoch+1}/{epochs} | Loss {avg_loss:.4f}")
 
         self.model.eval()
         if save_path:
@@ -255,7 +256,7 @@ class IntegratedSLM:
         if not valid_samples:
             return {"trained": False, "reason": "no_valid_samples"}
 
-        texts = [clean_text_transformer(s["text"]) for s in valid_samples]
+        texts = [clean_text_for_slm(s["text"]) for s in valid_samples]
         labels = [int(s["label"]) for s in valid_samples]
 
         # Đóng băng backbone, chỉ để head trainable

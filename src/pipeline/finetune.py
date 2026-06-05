@@ -64,55 +64,24 @@ def maybe_finetune_slm_on_clean(
             "min_samples": slm_finetune_min_samples,
         }
 
-    # === Xác định strategy ===
-    use_full_finetune = (
-        round_id >= ENABLE_FULL_FINETUNE_FROM_ROUND
-        and len(clean_pool) >= SLM_FULL_FINETUNE_MIN_SAMPLES
+    # Head-only fine-tune: chỉ cập nhật classifier head (đóng băng backbone)
+    print(
+        f"[Round {round_id}] Head-only fine-tune SLM trên "
+        f"{len(clean_pool)} D_clean samples "
+        f"(LR={slm_finetune_lr}, epochs={slm_finetune_epochs})...."
     )
-
-    if use_full_finetune:
-        # Full fine-tune: cập nhật cả backbone + head
-        print(
-            f"[Round {round_id}] Full fine-tune SLM (backbone + head) trên "
-            f"{len(clean_pool)} D_clean samples "
-            f"(LR={SLM_FULL_FINETUNE_LR}, epochs={SLM_FULL_FINETUNE_EPOCHS})..."
-        )
-        # Lấy texts và labels từ clean_pool
-        train_texts = [s["text"] for s in clean_pool if s.get("text")]
-        train_labels = [
-            int(s.get("label", s.get("label_slm", 1)))
-            for s in clean_pool
-            if s.get("text")
-        ]
-        stats = slm.finetune_full(
-            train_texts=train_texts,
-            train_labels=train_labels,
-            epochs=SLM_FULL_FINETUNE_EPOCHS,
-            batch_size=slm_finetune_batch_size,
-            lr=SLM_FULL_FINETUNE_LR,
-            weight_decay=slm_finetune_weight_decay,
-            warmup_ratio=0.1,
-        )
-        stats["strategy"] = "full_finetune"
-    else:
-        # Head-only fine-tune: nhanh hơn, an toàn khi ít data
-        print(
-            f"[Round {round_id}] Head-only fine-tune SLM trên "
-            f"{len(clean_pool)} D_clean samples "
-            f"(LR={slm_finetune_lr}, epochs={slm_finetune_epochs})..."
-        )
-        stats = slm.finetune_on_clean(
-            clean_samples=clean_pool,
-            epochs=slm_finetune_epochs,
-            batch_size=slm_finetune_batch_size,
-            lr=slm_finetune_lr,
-            weight_decay=slm_finetune_weight_decay,
-        )
-        stats["strategy"] = "head_only_finetune"
+    stats = slm.finetune_on_clean(
+        clean_samples=clean_pool,
+        epochs=slm_finetune_epochs,
+        batch_size=slm_finetune_batch_size,
+        lr=slm_finetune_lr,
+        weight_decay=slm_finetune_weight_decay,
+    )
+    stats["strategy"] = "head_only_finetune"
 
     if stats.get("trained", False):
         strategy = stats.get("strategy", "unknown")
-        avg_loss = stats.get("avg_loss", stats.get("train_loss_history", [None])[-1])
+        avg_loss = stats.get("avg_loss", None)
         avg_loss_str = f"{avg_loss:.4f}" if avg_loss is not None else "N/A"
         print(
             f"SLM fine-tune done | round={round_id} strategy={strategy} "
@@ -124,3 +93,4 @@ def maybe_finetune_slm_on_clean(
         print(f"Skip SLM fine-tune at round {round_id}: {stats}")
 
     return stats
+
