@@ -38,11 +38,13 @@ class IntegratedSLM:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self._loaded_model_path = None
         
-        if not os.path.exists(model_path):
-            print("Saved model not found. Using pre-trained PhoBERT base.")
-            model_path = "vinai/phobert-base"
+        # Check if the path is a local file/directory or a Hugging Face repo ID
+        if os.path.exists(model_path):
+            print(f"Loading SLM from local path: {model_path}")
+        elif "/" in model_path:
+            print(f"Loading SLM from HuggingFace Hub repo: {model_path}")
         else:
-            print(f"Loading SLM from {model_path}")
+            raise FileNotFoundError(f"Model path '{model_path}' not found and is not a valid Hugging Face ID. Fallback is disabled.")
         
         self._loaded_model_path = model_path
 

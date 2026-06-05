@@ -141,7 +141,16 @@ def clean_text_transformer(text: str) -> str:
     # 9. Chuẩn hóa khoảng trắng phát sinh do các bước xóa ở trên
     text = re.sub(r"\s+", " ", text).strip()
 
+    # 10. Tách từ tiếng Việt bằng underthesea
+    try:
+        from underthesea import word_tokenize
+        text = word_tokenize(text, format="text")
+    except Exception as e:
+        # Trong trường hợp chưa cài underthesea, giữ nguyên văn bản
+        pass
+
     return text
+
 
 
 def log_retrieval_to_csv(

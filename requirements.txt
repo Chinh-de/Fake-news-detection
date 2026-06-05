@@ -19,3 +19,4 @@ requests
 huggingface-hub
 pyvi
 duckdb
+underthesea>=6.0.0

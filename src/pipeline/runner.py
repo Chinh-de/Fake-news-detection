@@ -131,6 +131,7 @@ def run_mrcd_pipeline(
 
     d_clean = []
     d_noisy = []
+    round_logs = []
     round_history = []
     finetune_history = []
     knowledge_cache_local = {}
@@ -233,6 +234,9 @@ def run_mrcd_pipeline(
             prompt = state["cached_final_prompt"] or ""
             retrieval_source = "db_cache"
             knowledge_k = state["cached_knowledge_text"] or ""
+            wiki_ev = state["cached_wiki_evidence"]
+            rag_ev = state["cached_rag_evidence"]
+            fewshot_ev = state["cached_fewshot_examples"]
         else:
             text = clean_text_transformer(state["text"])
             demos, knowledge_k, retrieval_source = build_evidence_bundle(
@@ -251,6 +255,10 @@ def run_mrcd_pipeline(
             llm_raw = assess["llm_raw"]
             matched_label = assess["llm_label_matched"]
             prompt = assess["prompt"]
+            # Extract structured evidence from query_context and demos
+            wiki_ev = state["query_context"].get("knowledge_bundle", {}).get("wiki_definitions", {})
+            rag_ev = state["query_context"].get("knowledge_bundle", {}).get("rag_evidence", [])
+            fewshot_ev = demos
 
         state.update(
             {
@@ -262,6 +270,9 @@ def run_mrcd_pipeline(
                 "retrieval_source": retrieval_source,
                 "knowledge": knowledge_k,
                 "prompt": prompt,
+                "wiki_evidence": wiki_ev,
+                "rag_evidence": rag_ev,
+                "fewshot_examples": fewshot_ev,
             }
         )
 
@@ -304,6 +315,18 @@ def run_mrcd_pipeline(
         else:
             state["status"] = "noisy"
             d_noisy.append(state)
+
+        round_logs.append({
+            "event_id": state["event_id"],
+            "round_id": round_id,
+            "y_llm": state["label_llm"],
+            "y_slm": state["y_slm"],
+            "conf_slm": state["conf_slm"],
+            "status": state["status"],
+            "fewshot_examples": state["fewshot_examples"],
+            "rag_evidence": state["rag_evidence"],
+            "wiki_evidence": state["wiki_evidence"]
+        })
 
     round_history.append(
         {
@@ -354,6 +377,11 @@ def run_mrcd_pipeline(
                 llm=llm, round_id=round_id,
             )
 
+            # Extract structured evidence from query_context and demos for current round
+            wiki_ev = state["query_context"].get("knowledge_bundle", {}).get("wiki_definitions", {})
+            rag_ev = state["query_context"].get("knowledge_bundle", {}).get("rag_evidence", [])
+            fewshot_ev = demos
+
             state.update(
                 {
                     "round": round_id,
@@ -364,6 +392,9 @@ def run_mrcd_pipeline(
                     "retrieval_source": retrieval_source,
                     "knowledge": knowledge_k,
                     "prompt": assess["prompt"],
+                    "round_wiki_evidence": wiki_ev,
+                    "round_rag_evidence": rag_ev,
+                    "round_fewshot_examples": fewshot_ev,
                 }
             )
 
@@ -407,6 +438,18 @@ def run_mrcd_pipeline(
             else:
                 state["status"] = f"noisy@round{round_id}"
                 next_noisy.append(state)
+
+            round_logs.append({
+                "event_id": state["event_id"],
+                "round_id": round_id,
+                "y_llm": state["label_llm"],
+                "y_slm": state["y_slm"],
+                "conf_slm": state["conf_slm"],
+                "status": state["status"],
+                "fewshot_examples": state.get("round_fewshot_examples"),
+                "rag_evidence": state.get("round_rag_evidence"),
+                "wiki_evidence": state.get("round_wiki_evidence")
+            })
 
         d_noisy = next_noisy
         round_history.append(
@@ -475,4 +518,5 @@ def run_mrcd_pipeline(
         "history": round_history,
         "finetune_history": finetune_history,
         "knowledge_cache_size": len(knowledge_cache_local),
+        "round_logs": round_logs,
     }
