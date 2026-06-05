@@ -117,8 +117,9 @@ class LocalLLM(BaseLLM):
         gen_config = GenerationConfig(
             max_new_tokens=max(1, int(max_output_tokens)),
             do_sample=False,
-            temperature=LLM_TEMPERATURE,
-            top_p=LLM_TOP_P,
+            # Khi do_sample=False (Greedy), các tham số điều chỉnh phân phối xác suất ngẫu nhiên như temperature, top_k, top_p sẽ bị vô hiệu hóa 
+            # temperature=LLM_TEMPERATURE,
+            # top_p=LLM_TOP_P,
             pad_token_id=self.tokenizer.pad_token_id,
             eos_token_id=self.tokenizer.eos_token_id,
             cache_implementation="offloaded",  # Quan trọng: offload KV cache sang CPU
