@@ -299,6 +299,15 @@ class IntegratedSLM:
                 total_steps += 1
 
         self.model.eval()
+        # Giải phóng bộ nhớ gradients và optimizer
+        self.model.zero_grad(set_to_none=True)
+        for param in self.model.parameters():
+            param.requires_grad = False
+
+        del optimizer
+        del loader
+        del dataset
+
         avg_loss = total_loss / max(1, total_steps)
         return {
             "trained": True,

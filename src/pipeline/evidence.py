@@ -22,39 +22,15 @@ from src.retrieval.knowledge_agent import (
 )
 
 
-# ================================================================
-# Semantic Encoder Singleton (multilingual-e5-small)
-# ================================================================
-_demo_encoder = None
-
-
-def _get_demo_encoder():
-    """Lazy-load sentence encoder dùng cho hybrid retrieval."""
-    global _demo_encoder
-    if _demo_encoder is None:
-        try:
-            from sentence_transformers import SentenceTransformer
-            # multilingual-e5-small đã có trong requirements (dùng bởi knowledge_retrieval)
-            _demo_encoder = SentenceTransformer("intfloat/multilingual-e5-small")
-        except Exception:
-            _demo_encoder = None  # Fallback: sẽ dùng BM25 thuần
-    return _demo_encoder
-
-
 def retrieve_from_clean_pool(query: str, clean_pool: list, k: int = TOP_K_DEMOS) -> list:
     """
-    Hybrid retrieval từ D_clean: BM25 (50%) + Semantic Embedding (50%).
-
-    Sử dụng multilingual-e5-small để tìm kiếm theo ngữ nghĩa, kết hợp với
-    BM25 để tăng độ chính xác. Nếu encoder không sẵn có, fallback về BM25 thuần.
+    Retrieval từ D_clean bằng BM25 thuần túy để tránh quá tải/chậm do e5-small trên dữ liệu lớn.
 
     Flow:
     1. Kiểm tra nếu clean_pool trống thì trả về danh sách rỗng.
-    2. Tính BM25 scores và normalize về [0, 1].
-    3. Tính semantic similarity dùng sentence encoder (cosine).
-    4. Hybrid score = 0.5 * BM25 + 0.5 * Semantic.
-    5. Chọn top-k theo hybrid score.
-    6. Trả về demos kèm source="D_clean_hybrid" để prompt biết đây là đã xác nhận.
+    2. Tính BM25 scores.
+    3. Chọn top-k theo BM25 score.
+    4. Trả về demos kèm source="D_clean" để prompt biết đây là đã xác nhận.
     """
     if not clean_pool:
         return []
@@ -66,30 +42,8 @@ def retrieve_from_clean_pool(query: str, clean_pool: list, k: int = TOP_K_DEMOS)
     tokenized_corpus = [doc.lower().split() for doc in corpus_items]
     bm25 = BM25Okapi(tokenized_corpus)
     bm25_scores = bm25.get_scores(cleaned_query.lower().split())
-    bm25_min, bm25_max = bm25_scores.min(), bm25_scores.max()
-    if bm25_max > bm25_min:
-        bm25_scores_norm = (bm25_scores - bm25_min) / (bm25_max - bm25_min)
-    else:
-        bm25_scores_norm = np.zeros_like(bm25_scores)
 
-    # === Semantic Scores (fallback về BM25 thuần nếu encoder không có) ===
-    encoder = _get_demo_encoder()
-    if encoder is not None:
-        try:
-            query_emb = encoder.encode([cleaned_query], normalize_embeddings=True)
-            corpus_embs = encoder.encode(corpus_items, normalize_embeddings=True, batch_size=32)
-            semantic_scores = (query_emb @ corpus_embs.T)[0]  # cosine similarity
-            # Hybrid: 50% BM25 + 50% Semantic
-            hybrid_scores = 0.5 * bm25_scores_norm + 0.5 * semantic_scores
-            source_tag = "D_clean_hybrid"
-        except Exception:
-            hybrid_scores = bm25_scores_norm
-            source_tag = "D_clean"
-    else:
-        hybrid_scores = bm25_scores_norm
-        source_tag = "D_clean"
-
-    top_k_indices = np.argsort(hybrid_scores)[::-1][:k]
+    top_k_indices = np.argsort(bm25_scores)[::-1][:k]
 
     demos = []
     for idx in top_k_indices:
@@ -99,8 +53,8 @@ def retrieve_from_clean_pool(query: str, clean_pool: list, k: int = TOP_K_DEMOS)
             {
                 "text": clean_text_transformer(item["text"]),
                 "label": to_clean_demo_label(clean_label),
-                "source": source_tag,
-                "score": float(hybrid_scores[idx]),
+                "source": "D_clean",
+                "score": float(bm25_scores[idx]),
             }
         )
     return demos

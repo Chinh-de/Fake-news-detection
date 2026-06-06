@@ -92,5 +92,9 @@ def maybe_finetune_slm_on_clean(
     else:
         print(f"Skip SLM fine-tune at round {round_id}: {stats}")
 
+    # Dọn dẹp cache và VRAM dư thừa sau khi fine-tune
+    import gc
+    import torch
+    gc.collect()
+    torch.cuda.empty_cache()
     return stats
-

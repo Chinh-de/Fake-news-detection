@@ -359,6 +359,12 @@ def run_mrcd_pipeline(
         )
         finetune_history.append({"round": round_id, **ft_stats})
 
+        # Giải phóng bộ nhớ cache sau khi training SLM để chừa chỗ cho LLM ở vòng tiếp theo
+        import gc
+        import torch
+        gc.collect()
+        torch.cuda.empty_cache()
+
         next_noisy = []
         promoted_clean = 0
 
