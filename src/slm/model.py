@@ -242,7 +242,7 @@ class IntegratedSLM:
         clean_samples: list,
         epochs: int = 2,
         batch_size: int = 32,
-        lr: float = 1e-3,
+        lr: float = 2e-5,
         weight_decay: float = 1e-4,
     ) -> dict:
         """

@@ -79,7 +79,7 @@ CRAWL_MAX_WORKERS = min(8, max(2, (os.cpu_count() or 4)))
 ENABLE_SLM_FINETUNE = True
 SLM_FINETUNE_EPOCHS = 3
 SLM_FINETUNE_BATCH_SIZE = 32
-SLM_FINETUNE_LR = 1e-3
+SLM_FINETUNE_LR = 2e-5
 SLM_FINETUNE_WEIGHT_DECAY = 1e-4
 SLM_FINETUNE_MIN_SAMPLES = 4
 # Vietnamese text needs longer sequences due to morphological complexity
