@@ -152,18 +152,18 @@ def clean_text_transformer(text: str) -> str:
 
 
 def clean_text_for_slm(text: str) -> str:
-    """
-    Tách từ tiếng Việt bằng underthesea cho SLM (PhoBERT) trên văn bản đã được làm sạch trước đó.
-    """
-    if not text:
-        return text
-    # Tách từ tiếng Việt bằng underthesea (tạo dạng "xung_đột" chuẩn cho PhoBERT)
-    try:
-        from underthesea import word_tokenize
-        text = word_tokenize(text, format="text")
-    except Exception:
-        # Trong trường hợp chưa cài underthesea, giữ nguyên văn bản
-        pass
+    # """
+    # Tách từ tiếng Việt bằng underthesea cho SLM (PhoBERT) trên văn bản đã được làm sạch trước đó.
+    # """
+    # if not text:
+    #     return text
+    # # Tách từ tiếng Việt bằng underthesea (tạo dạng "xung_đột" chuẩn cho PhoBERT)
+    # try:
+    #     from underthesea import word_tokenize
+    #     text = word_tokenize(text, format="text")
+    # except Exception:
+    #     # Trong trường hợp chưa cài underthesea, giữ nguyên văn bản
+    #     pass
     return text
 
 
