@@ -98,11 +98,8 @@ SLM_FULL_FINETUNE_MIN_SAMPLES = 30     # Số samples tối thiểu để thực
 # ============================================================
 # "wiki_only" = chỉ lấy Wikipedia
 # "full"      = Wikipedia + fact-check crawl + rerank
-KNOWLEDGE_MODE = os.environ.get("MRCD_KNOWLEDGE_MODE", "full")
-
-# Bật cờ này để tải toàn bộ nội dung trang Wikipedia thay vì chỉ summary.
-# Có thể tiêu thụ nhiều token của LLM hơn nếu bật.
-WIKI_FETCH_FULL = os.environ.get("MRCD_WIKI_FETCH_FULL", "false").lower() == "true"
+KNOWLEDGE_MODE = "full"
+WIKI_FETCH_FULL = False
 
 # ============================================================
 # Retrieval Configuration
