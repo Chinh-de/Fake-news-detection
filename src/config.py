@@ -39,6 +39,8 @@ LLM_MODEL_NAME = os.environ.get(
     "LLM_MODEL_NAME",
     "Qwen/Qwen2.5-7B-Instruct",  # Better support for Vietnamese than Llama 3
 )
+LLM_ENDPOINT = os.environ.get("LLM_ENDPOINT", None)
+LLM_API_KEY = os.environ.get("LLM_API_KEY", "EMPTY")
 LLM_MAX_NEW_TOKENS = 1024
 LLM_MAX_OUTPUT_TOKENS_EXTRACTION = 1024
 LLM_MAX_OUTPUT_TOKENS_CLASSIFICATION = 15
