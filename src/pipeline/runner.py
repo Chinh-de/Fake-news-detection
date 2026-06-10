@@ -225,8 +225,8 @@ def run_mrcd_pipeline(
     print("\n=== Round 1: Retrieval + Assessment + Selection ===")
     
     # 1. LLM Assessment (Or Cache Load)
-    for state in tqdm(event_states, desc="Round 1 - LLM Processing"):
-        # Nếu có cache và hợp lệ, bỏ qua tìm kiếm và gọi LLM, lấy luôn kết quả
+    states_to_process = []
+    for state in event_states:
         if state["cached_llm_label"] != -1 and state["cached_llm_label"] is not None:
             y_llm = int(state["cached_llm_label"])
             llm_raw = state["cached_llm_raw"] or ""
@@ -237,7 +237,28 @@ def run_mrcd_pipeline(
             wiki_ev = state["cached_wiki_evidence"]
             rag_ev = state["cached_rag_evidence"]
             fewshot_ev = state["cached_fewshot_examples"]
+            state.update(
+                {
+                    "round": round_id,
+                    "label": y_llm,
+                    "label_llm": y_llm,
+                    "llm_raw": llm_raw,
+                    "llm_label_matched": matched_label,
+                    "retrieval_source": retrieval_source,
+                    "knowledge": knowledge_k,
+                    "prompt": prompt,
+                    "wiki_evidence": wiki_ev,
+                    "rag_evidence": rag_ev,
+                    "fewshot_examples": fewshot_ev,
+                }
+            )
         else:
+            states_to_process.append(state)
+
+    if states_to_process:
+        MAX_CONCURRENCY = 3
+        
+        def process_single_state(state):
             text = clean_text_transformer(state["text"])
             demos, knowledge_k, retrieval_source = build_evidence_bundle(
                 text=text,
@@ -255,13 +276,11 @@ def run_mrcd_pipeline(
             llm_raw = assess["llm_raw"]
             matched_label = assess["llm_label_matched"]
             prompt = assess["prompt"]
-            # Extract structured evidence from query_context and demos
             wiki_ev = state["query_context"].get("knowledge_bundle", {}).get("wiki_definitions", {})
             rag_ev = state["query_context"].get("knowledge_bundle", {}).get("rag_evidence", [])
             fewshot_ev = demos
-
-        state.update(
-            {
+            
+            return {
                 "round": round_id,
                 "label": y_llm,
                 "label_llm": y_llm,
@@ -274,7 +293,33 @@ def run_mrcd_pipeline(
                 "rag_evidence": rag_ev,
                 "fewshot_examples": fewshot_ev,
             }
-        )
+
+        with ThreadPoolExecutor(max_workers=MAX_CONCURRENCY) as executor:
+            futures = {executor.submit(process_single_state, s): s for s in states_to_process}
+            for future in tqdm(
+                as_completed(futures),
+                total=len(futures),
+                desc="Round 1 - LLM Processing (Parallel)",
+            ):
+                state = futures[future]
+                try:
+                    result = future.result()
+                    state.update(result)
+                except Exception as e:
+                    print(f"Error processing state {state['event_id']}: {e}")
+                    state.update({
+                        "round": round_id,
+                        "label": 1,
+                        "label_llm": 1,
+                        "llm_raw": f"Error: {e}",
+                        "llm_label_matched": "Giả",
+                        "retrieval_source": "error_fallback",
+                        "knowledge": "No info.",
+                        "prompt": "",
+                        "wiki_evidence": {},
+                        "rag_evidence": [],
+                        "fewshot_examples": [],
+                    })
 
     # 2. SLM Batch Inference (Luôn dự đoán bằng SLM hiện tại để kiểm tra độ đồng thuận)
     print(f"Round 1 - SLM Batch Inference for {len(event_states)} items")
@@ -369,28 +414,28 @@ def run_mrcd_pipeline(
         promoted_clean = 0
 
         # 1. LLM Assessment (Được chạy lại bình thường ở Round 2 trở đi để cập nhật demos từ D_clean)
-        for state in tqdm(d_noisy, desc=f"Round {round_id} - LLM Processing"):
-            text = clean_text_transformer(state["text"])
-            demos, knowledge_k, retrieval_source = build_evidence_bundle(
-                text=text,
-                static_corpus=static_corpus,
-                clean_pool=d_clean,
-                round_id=round_id,
-                query_context=state["query_context"],
-                demo_k=TOP_K_DEMOS,
-            )
-            assess = assess_with_llm(
-                text=text, demos=demos, knowledge_k=knowledge_k,
-                llm=llm, round_id=round_id,
-            )
-
-            # Extract structured evidence from query_context and demos for current round
-            wiki_ev = state["query_context"].get("knowledge_bundle", {}).get("wiki_definitions", {})
-            rag_ev = state["query_context"].get("knowledge_bundle", {}).get("rag_evidence", [])
-            fewshot_ev = demos
-
-            state.update(
-                {
+        if d_noisy:
+            MAX_CONCURRENCY = 3
+            
+            def process_single_noisy_state(state):
+                text = clean_text_transformer(state["text"])
+                demos, knowledge_k, retrieval_source = build_evidence_bundle(
+                    text=text,
+                    static_corpus=static_corpus,
+                    clean_pool=d_clean,
+                    round_id=round_id,
+                    query_context=state["query_context"],
+                    demo_k=TOP_K_DEMOS,
+                )
+                assess = assess_with_llm(
+                    text=text, demos=demos, knowledge_k=knowledge_k,
+                    llm=llm, round_id=round_id,
+                )
+                wiki_ev = state["query_context"].get("knowledge_bundle", {}).get("wiki_definitions", {})
+                rag_ev = state["query_context"].get("knowledge_bundle", {}).get("rag_evidence", [])
+                fewshot_ev = demos
+                
+                return {
                     "round": round_id,
                     "label": assess["y_llm"],
                     "label_llm": assess["y_llm"],
@@ -403,7 +448,33 @@ def run_mrcd_pipeline(
                     "round_rag_evidence": rag_ev,
                     "round_fewshot_examples": fewshot_ev,
                 }
-            )
+
+            with ThreadPoolExecutor(max_workers=MAX_CONCURRENCY) as executor:
+                futures = {executor.submit(process_single_noisy_state, s): s for s in d_noisy}
+                for future in tqdm(
+                    as_completed(futures),
+                    total=len(futures),
+                    desc=f"Round {round_id} - LLM Processing (Parallel)",
+                ):
+                    state = futures[future]
+                    try:
+                        result = future.result()
+                        state.update(result)
+                    except Exception as e:
+                        print(f"Error processing noisy state {state['event_id']} in round {round_id}: {e}")
+                        state.update({
+                            "round": round_id,
+                            "label": 1,
+                            "label_llm": 1,
+                            "llm_raw": f"Error: {e}",
+                            "llm_label_matched": "Giả",
+                            "retrieval_source": "error_fallback",
+                            "knowledge": "No info.",
+                            "prompt": "",
+                            "round_wiki_evidence": {},
+                            "round_rag_evidence": [],
+                            "round_fewshot_examples": [],
+                        })
 
         # 2. SLM Batch Inference
         print(f"Round {round_id} - SLM Batch Inference for {len(d_noisy)} items")

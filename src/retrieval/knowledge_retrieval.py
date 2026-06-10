@@ -327,7 +327,10 @@ def get_fact_ranker() -> SentenceTransformer:
     """
     global _fact_ranker
     if _fact_ranker is None:
-        _fact_ranker = SentenceTransformer("intfloat/multilingual-e5-small", device="cpu")
+        import torch
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"Loading SentenceTransformer ranker on device: {device}")
+        _fact_ranker = SentenceTransformer("intfloat/multilingual-e5-small", device=device)
     return _fact_ranker
 
 

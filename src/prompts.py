@@ -153,7 +153,74 @@ def build_classification_prompt(
         if "<VERIFIED_REPORTS>" in knowledge_k or "<ENTITY_DEFINITIONS>" in knowledge_k:
             knowledge_section = knowledge_k
         else:
-            knowledge_section = f"<VERIFIED_REPORTS>\n{knowledge_k}\n</VERIFIED_REPORTS>"
+            # Phân tách knowledge_k thô thành VERIFIED_REPORTS và ENTITY_DEFINITIONS dựa trên cấu trúc dòng
+            lines = knowledge_k.split("\n")
+            verified_reports_blocks = []
+            entity_definitions_blocks = []
+            
+            current_block = []
+            current_type = None  # 'report' hoặc 'entity'
+            
+            for line in lines:
+                stripped = line.strip()
+                if stripped.startswith("- Title:"):
+                    if current_block and current_type:
+                        if current_type == 'report':
+                            verified_reports_blocks.append("\n".join(current_block))
+                        else:
+                            entity_definitions_blocks.append("\n".join(current_block))
+                    current_block = [line]
+                    current_type = 'report'
+                elif stripped.startswith("- Entity:"):
+                    if current_block and current_type:
+                        if current_type == 'report':
+                            verified_reports_blocks.append("\n".join(current_block))
+                        else:
+                            entity_definitions_blocks.append("\n".join(current_block))
+                    current_block = [line]
+                    current_type = 'entity'
+                else:
+                    if current_type is not None:
+                        current_block.append(line)
+                    else:
+                        if stripped:
+                            current_block.append(line)
+            
+            if current_block and current_type:
+                if current_type == 'report':
+                    verified_reports_blocks.append("\n".join(current_block))
+                else:
+                    entity_definitions_blocks.append("\n".join(current_block))
+            
+            reports_text = "\n\n".join(verified_reports_blocks).strip()
+            entity_text = "\n\n".join(entity_definitions_blocks).strip()
+            
+            if not reports_text and not entity_text:
+                # Fallback nếu không khớp bất kỳ cấu trúc nào
+                knowledge_section = f"<VERIFIED_REPORTS>\n{knowledge_k}\n</VERIFIED_REPORTS>"
+            else:
+                sections = []
+                if reports_text:
+                    sections.append(f"<VERIFIED_REPORTS>\n{reports_text}\n</VERIFIED_REPORTS>")
+                if entity_text:
+                    sections.append(f"<ENTITY_DEFINITIONS>\n{entity_text}\n</ENTITY_DEFINITIONS>")
+                knowledge_section = "\n\n".join(sections)
+
+    # Cắt ngắn bớt phần tri thức nếu quá dài 10k kí tự
+    if len(knowledge_section) > 10000:
+        truncated = knowledge_section[:10000] + "..."
+        
+        # Đóng các thẻ XML nếu chúng được mở nhưng chưa được đóng trong phần bị cắt
+        open_tags = []
+        if "<VERIFIED_REPORTS>" in truncated and "</VERIFIED_REPORTS>" not in truncated:
+            open_tags.append("VERIFIED_REPORTS")
+        if "<ENTITY_DEFINITIONS>" in truncated and "</ENTITY_DEFINITIONS>" not in truncated:
+            open_tags.append("ENTITY_DEFINITIONS")
+            
+        for tag in reversed(open_tags):
+            truncated += f"</{tag}>"
+            
+        knowledge_section = truncated
 
     # 1. FEW-SHOT DEMOS
     if not demos:
@@ -165,13 +232,9 @@ def build_classification_prompt(
             text_demo = demo.get("text", "")[:1000].strip()
             source = demo.get("source", "")
             
-            # Badge xác nhận cho demo từ D_clean (chỉ hiển thị từ Round 2)
-            if round_id >= 2 and "D_clean" in source:
-                verified_badge = " [✓ Đã xác nhận]"
-            else:
-                verified_badge = ""
+          
 
-            demo_text += f'\n[Ví dụ {i} / Example {i}]{verified_badge}\nNội dung: "{text_demo}..."\nKết luận: {label_str}\n'
+            demo_text += f'\n[Ví dụ {i} / Example {i}]\nNội dung: "{text_demo}..."\nKết luận: {label_str}\n'
 
     # Sanitize input claim
     sanitized_input = text.replace('"', '\\"').replace('\n', ' ')
