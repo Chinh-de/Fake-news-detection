@@ -7,6 +7,7 @@ Model configuration is loaded from config.py and environment variables.
 import os
 import time
 import requests
+import threading
 
 from src.config import (
     LLM_MODEL_NAME,
@@ -24,6 +25,7 @@ class ExternalLLM(BaseLLM):
     LLM handler calling an external API (vLLM / OpenAI compatible)
     to save local RAM/VRAM and prevent OOM.
     """
+    _semaphore = threading.Semaphore(3)
 
     def __init__(self, model_name: str = None, endpoint: str = None, api_key: str = None):
         self.model_name = model_name or LLM_MODEL_NAME
@@ -71,17 +73,18 @@ class ExternalLLM(BaseLLM):
         }
 
         url = f"{self.endpoint}/chat/completions"
-        try:
-            response = requests.post(url, json=payload, headers=headers, timeout=120)
-            response.raise_for_status()
-            data = response.json()
-            content = data["choices"][0]["message"]["content"]
-            if content is None:
-                return ""
-            return content.strip()
-        except Exception as e:
-            print(f"Error calling external LLM at {url}: {e}")
-            raise RuntimeError(f"External LLM call failed: {e}")
+        with ExternalLLM._semaphore:
+            try:
+                response = requests.post(url, json=payload, headers=headers, timeout=300)
+                response.raise_for_status()
+                data = response.json()
+                content = data["choices"][0]["message"]["content"]
+                if content is None:
+                    return ""
+                return content.strip()
+            except Exception as e:
+                print(f"Error calling external LLM at {url}: {e}")
+                raise RuntimeError(f"External LLM call failed: {e}")
 
 
 # ============================================================
